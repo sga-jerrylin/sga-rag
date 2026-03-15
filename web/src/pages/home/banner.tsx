@@ -41,12 +41,17 @@ export function Banner() {
 }
 
 export function NextBanner() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { branding } = useBranding();
   return (
-    <section className="text-5xl pt-10 pb-14 font-bold px-10">
-      <span className="text-text-primary">{t('header.welcome')}</span>
-      <span className="pl-3 text-transparent bg-clip-text  bg-gradient-to-l from-[#40EBE3] to-[#4A51FF]">
+    <section
+      className="text-5xl leading-normal text-left pt-10 pb-14 px-10 font-bold"
+      dir={i18n.language?.startsWith('ar') ? 'rtl' : 'ltr'}
+    >
+      <span className="font-semibold text-text-primary">
+        {t('header.welcome')}{' '}
+      </span>
+      <span className="font-bold text-transparent bg-clip-text bg-gradient-to-l from-[#40EBE3] to-[#4A51FF]">
         {branding.productName}
       </span>
     </section>

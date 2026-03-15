@@ -233,7 +233,32 @@ def get_mysql_status():
         }
 
 
+def _minio_scheme_and_verify():
+    """
+    Determine URL scheme (http/https) and SSL verify flag for MinIO health check.
+    Uses MINIO.secure for scheme and MINIO.verify for certificate verification
+    (e.g. self-signed certs when verify is False).
+    """
+    secure = settings.MINIO.get("secure", False)
+    if isinstance(secure, str):
+        secure = secure.lower() in ("true", "1", "yes")
+    scheme = "https" if secure else "http"
+    verify = settings.MINIO.get("verify", True)
+    if isinstance(verify, str):
+        verify = verify.lower() not in ("false", "0", "no")
+    elif isinstance(verify, bool):
+        pass
+    else:
+        verify = bool(verify)
+    return scheme, verify
+
+
 def check_minio_alive():
+    """
+    Check MinIO service liveness via /minio/health/live.
+    Uses http or https and optional certificate verification based on
+    MINIO.secure and MINIO.verify configuration.
+    """
     start_time = timer()
     host = str(settings.MINIO.get("host", "")).strip()
     probe_timeout = float(os.environ.get("MINIO_HEALTH_CHECK_TIMEOUT", "3"))
@@ -260,17 +285,29 @@ def check_minio_alive():
             "message": message,
         }
 
+    scheme, verify = _minio_scheme_and_verify()
+    probe_candidates: list[tuple[str, bool]] = []
     if host.startswith(("http://", "https://")):
-        base_urls = [host.rstrip("/")]
+        normalized_host = host.rstrip("/")
+        probe_candidates.append((normalized_host, verify if normalized_host.startswith("https://") else False))
+        if normalized_host.startswith("https://"):
+            probe_candidates.append((normalized_host.replace("https://", "http://", 1), False))
+        elif normalized_host.startswith("http://"):
+            probe_candidates.append((normalized_host.replace("http://", "https://", 1), verify))
     else:
-        base_urls = [f"http://{host}", f"https://{host}"]
+        primary_base = f"{scheme}://{host}"
+        probe_candidates.append((primary_base, verify if scheme == "https" else False))
+        if primary_base != f"http://{host}":
+            probe_candidates.append((f"http://{host}", False))
+        if primary_base != f"https://{host}":
+            probe_candidates.append((f"https://{host}", verify))
 
     last_error = sdk_error
-    for base_url in base_urls:
+    for base_url, request_verify in probe_candidates:
         for endpoint in ("/minio/health/live", "/minio/health/ready"):
             url = f"{base_url}{endpoint}"
             try:
-                response = requests.get(url, timeout=probe_timeout)
+                response = requests.get(url, timeout=probe_timeout, verify=request_verify)
                 if response.status_code == 200:
                     return {"status": "alive", "message": _elapsed_msg()}
                 last_error = f"{url} returned {response.status_code}"

@@ -83,9 +83,7 @@ const RaptorFormFields = ({
                   tooltip={t('useRaptorTip')}
                   className="text-sm  w-1/4 whitespace-break-spaces"
                 >
-                  <div className="w-auto xl:w-20 2xl:w-24 3xl:w-28 4xl:w-auto ">
-                    {t('useRaptor')}
-                  </div>
+                  {t('useRaptor')}
                 </FormLabel>
                 <div className="w-3/4">
                   <FormControl>
@@ -124,8 +122,18 @@ const RaptorFormFields = ({
                   <FormControl>
                     <Radio.Group {...field} disabled={!!data?.finish_at}>
                       <div className={'flex gap-4 w-full text-text-secondary '}>
-                        <Radio value="dataset">{t('scopeDataset')}</Radio>
-                        <Radio value="file">{t('scopeSingleFile')}</Radio>
+                        <Radio
+                          value="dataset"
+                          testId="ds-settings-raptor-generation-scope-option-dataset"
+                        >
+                          {t('scopeDataset')}
+                        </Radio>
+                        <Radio
+                          value="file"
+                          testId="ds-settings-raptor-generation-scope-option-document"
+                        >
+                          {t('scopeSingleFile')}
+                        </Radio>
                       </div>
                     </Radio.Group>
                   </FormControl>
@@ -162,6 +170,7 @@ const RaptorFormFields = ({
                           onChange={(e) => {
                             field.onChange(e?.target?.value);
                           }}
+                          data-testid="ds-settings-raptor-prompt-textarea"
                         />
                       </FormControl>
                     </div>
@@ -181,6 +190,8 @@ const RaptorFormFields = ({
             max={2048}
             min={0}
             layout={FormLayout.Horizontal}
+            sliderTestId="ds-settings-raptor-max-token-slider"
+            numberInputTestId="ds-settings-raptor-max-token-input"
           ></SliderInputFormField>
           <SliderInputFormField
             name={'parser_config.raptor.threshold'}
@@ -190,6 +201,8 @@ const RaptorFormFields = ({
             max={1}
             min={0}
             layout={FormLayout.Horizontal}
+            sliderTestId="ds-settings-raptor-threshold-slider"
+            numberInputTestId="ds-settings-raptor-threshold-input"
           ></SliderInputFormField>
           <SliderInputFormField
             name={'parser_config.raptor.max_cluster'}
@@ -198,6 +211,8 @@ const RaptorFormFields = ({
             max={1024}
             min={1}
             layout={FormLayout.Horizontal}
+            sliderTestId="ds-settings-raptor-max-cluster-slider"
+            numberInputTestId="ds-settings-raptor-max-cluster-input"
           ></SliderInputFormField>
           <FormField
             control={form.control}
@@ -205,7 +220,10 @@ const RaptorFormFields = ({
             render={({ field }) => (
               <FormItem className=" items-center space-y-0 ">
                 <div className="flex items-center">
-                  <FormLabel className="text-sm  whitespace-wrap w-1/4">
+                  <FormLabel
+                    className="text-sm  whitespace-wrap w-1/4"
+                    tooltip={t('randomSeedTip')}
+                  >
                     {t('randomSeed')}
                   </FormLabel>
                   <div className="w-3/4">
@@ -215,11 +233,13 @@ const RaptorFormFields = ({
                         className="w-full"
                         defaultValue={0}
                         type="number"
+                        data-testid="ds-settings-raptor-seed-input"
                         suffix={
                           <div className="w-7 flex justify-center items-center">
                             <Shuffle
                               className="size-3.5 cursor-pointer"
                               onClick={handleGenerate}
+                              data-testid="ds-settings-raptor-seed-randomize-btn"
                             />
                           </div>
                         }

@@ -30,6 +30,7 @@ export function LayoutRecognizeFormField({
   label,
   showMineruOptions = true,
   showPaddleocrOptions = true,
+  testId,
 }: {
   name?: string;
   horizontal?: boolean;
@@ -37,6 +38,7 @@ export function LayoutRecognizeFormField({
   label?: ReactNode;
   showMineruOptions?: boolean;
   showPaddleocrOptions?: boolean;
+  testId?: string;
 }) {
   const form = useFormContext();
 
@@ -106,6 +108,7 @@ export function LayoutRecognizeFormField({
                     <SelectWithSearch
                       {...field}
                       options={options}
+                      testId={testId}
                     ></SelectWithSearch>
                   </FormControl>
                 </div>

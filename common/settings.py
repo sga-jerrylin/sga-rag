@@ -16,7 +16,6 @@
 import os
 import json
 import secrets
-from datetime import date
 import logging
 from common.constants import RAG_FLOW_SERVICE_NAME
 from common.file_utils import get_project_base_directory
@@ -34,6 +33,7 @@ from rag.utils.azure_spn_conn import RAGFlowAzureSpnBlob
 from rag.utils.gcs_conn import RAGFlowGCS
 from rag.utils.minio_conn import RAGFlowMinio
 from rag.utils.opendal_conn import OpenDALStorage
+from rag.utils.redis_conn import REDIS_CONN
 from rag.utils.s3_conn import RAGFlowS3
 from rag.utils.oss_conn import RAGFlowOSS
 
@@ -96,6 +96,9 @@ REGISTER_ENABLED = 1
 # When disabled, tenants must configure their own LLM
 GLOBAL_LLM_ENABLED = True
 
+# SSO-only mode: hide password login form
+DISABLE_PASSWORD_LOGIN = False
+
 # sandbox-executor-manager
 SANDBOX_HOST = None
 STRONG_TEST_COUNT = int(os.environ.get("STRONG_TEST_COUNT", "8"))
@@ -140,21 +143,22 @@ def get_svr_queue_names():
     return [get_svr_queue_name(priority) for priority in [1, 0]]
 
 def _get_or_create_secret_key():
-    secret_key = os.environ.get("RAGFLOW_SECRET_KEY")
-    if secret_key and len(secret_key) >= 32:
-        return secret_key
-
-    # Check if there's a configured secret key
-    configured_key = get_base_config(RAG_FLOW_SERVICE_NAME, {}).get("secret_key")
-    if configured_key and configured_key != str(date.today()) and len(configured_key) >= 32:
-        return configured_key
+    # secret_key = os.environ.get("RAGFLOW_SECRET_KEY")
+    # if secret_key and len(secret_key) >= 32:
+    #     return secret_key
+    #
+    # # Check if there's a configured secret key
+    # configured_key = get_base_config(RAG_FLOW_SERVICE_NAME, {}).get("secret_key")
+    # if configured_key and configured_key != str(date.today()) and len(configured_key) >= 32:
+    #     return configured_key
 
     # Generate a new secure key and warn about it
     import logging
 
-    new_key = secrets.token_hex(32)
+    generated_key = secrets.token_hex(32)
+    secret_key = REDIS_CONN.get_or_create_secret_key("ragflow:system:secret_key", generated_key)
     logging.warning("SECURITY WARNING: Using auto-generated SECRET_KEY.")
-    return new_key
+    return secret_key
 
 class StorageFactory:
     storage_mapping = {
@@ -192,11 +196,21 @@ def init_settings():
 
     global GLOBAL_LLM_ENABLED
     try:
-        # Read from environment variable, default to True (enabled)
         env_value = os.environ.get("GLOBAL_LLM_ENABLED", "1")
         GLOBAL_LLM_ENABLED = env_value.lower() in ("1", "true", "yes", "on")
     except Exception:
         GLOBAL_LLM_ENABLED = True
+
+    global DISABLE_PASSWORD_LOGIN
+    try:
+        env_val = os.environ.get("DISABLE_PASSWORD_LOGIN", "").lower()
+        if env_val in ("1", "true", "yes"):
+            DISABLE_PASSWORD_LOGIN = True
+        else:
+            authentication_conf = get_base_config("authentication", {})
+            DISABLE_PASSWORD_LOGIN = bool(authentication_conf.get("disable_password_login", False))
+    except Exception:
+        pass
 
     global FACTORY_LLM_INFOS
     try:
@@ -256,7 +270,7 @@ def init_settings():
     OAUTH_CONFIG = get_base_config("oauth", {})
 
     global DOC_ENGINE, DOC_ENGINE_INFINITY, DOC_ENGINE_OCEANBASE, docStoreConn, ES, OB, OS, INFINITY, NEBULA
-    DOC_ENGINE = os.environ.get("DOC_ENGINE", "elasticsearch")
+    DOC_ENGINE = os.environ.get("DOC_ENGINE", "elasticsearch").strip()
     DOC_ENGINE_INFINITY = (DOC_ENGINE.lower() == "infinity")
     DOC_ENGINE_OCEANBASE = (DOC_ENGINE.lower() == "oceanbase")
     NEBULA = get_base_config("nebula", {})
