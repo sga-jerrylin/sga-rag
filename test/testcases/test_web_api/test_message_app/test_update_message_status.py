@@ -83,7 +83,7 @@ class TestUpdateMessageStatus:
         assert list_res["code"] == 0, list_res
         message_id = list_res["data"]["messages"]["message_list"][0]["message_id"]
 
-        url = f"{HOST_ADDRESS}/api/{VERSION}/messages/{memory_id}:{message_id}"
+        url = f"{HOST_ADDRESS}/api/{VERSION}/km/messages/{memory_id}:{message_id}"
         res = requests.put(url=url, headers={"Content-Type": "application/json"}, auth=WebApiAuth, json={"status": "false"}).json()
         assert res["code"] == 101, res
         assert "Status must be a boolean." in res["message"], res
@@ -97,7 +97,7 @@ class TestUpdateMessageStatus:
     @pytest.mark.p2
     def test_update_invalid_message_id(self, WebApiAuth):
         memory_id = self.memory_id
-        url = f"{HOST_ADDRESS}/api/{VERSION}/messages/{memory_id}:invalid_message_id"
+        url = f"{HOST_ADDRESS}/api/{VERSION}/km/messages/{memory_id}:invalid_message_id"
         res = requests.put(
             url=url,
             headers={"Content-Type": "application/json"},

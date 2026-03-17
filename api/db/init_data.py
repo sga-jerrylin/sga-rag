@@ -24,18 +24,16 @@ from copy import deepcopy
 from peewee import IntegrityError
 
 from api.db import UserTenantRole
-from api.db.db_models import init_database_tables as init_web_db, LLMFactories, LLM, TenantLLM, Knowledgebase, Dialog, Memory
+from api.db.db_models import init_database_tables as init_web_db, LLMFactories, LLM, TenantLLM, Knowledgebase, Dialog
 from api.db.services import UserService
 from api.db.services.canvas_service import CanvasTemplateService
 from api.db.services.document_service import DocumentService
 from api.db.services.knowledgebase_service import KnowledgebaseService
-from api.db.services.memory_service import MemoryService
 from api.db.services.tenant_llm_service import LLMFactoriesService, TenantLLMService
 from api.db.services.llm_service import LLMService, LLMBundle, get_init_tenant_llm
 from api.db.services.user_service import TenantService, UserTenantService
 from api.db.services.system_settings_service import SystemSettingsService
 from api.db.services.dialog_service import DialogService
-from api.db.joint_services.memory_message_service import init_message_id_sequence, init_memory_size_cache, fix_missing_tokenized_memory
 from api.db.joint_services.tenant_model_service import get_tenant_default_model_by_type
 from common.constants import LLMType
 from common.file_utils import get_project_base_directory
@@ -255,9 +253,6 @@ def init_web_data():
 
     add_graph_templates()
     ensure_superuser_team_membership()
-    init_message_id_sequence()
-    init_memory_size_cache()
-    fix_missing_tokenized_memory()
     fix_empty_tenant_model_id()
     logging.info("init web data success:{}".format(time.time() - start_time))
 
@@ -336,38 +331,6 @@ def fix_empty_tenant_model_id():
             if tenant_llm:
                 update_cnt += DialogService.filter_update([Dialog.id.in_(v)], {"tenant_rerank_id": tenant_llm.id})
         logging.info(f"Update {update_cnt} tenant_rerank_id in table dialog.")
-    # memory
-    empty_tenant_embd_id_memories = MemoryService.get_null_tenant_embd_id_row()
-    if empty_tenant_embd_id_memories:
-        logging.info(f"Found {len(empty_tenant_embd_id_memories)} empty tenant_embd_id memories.")
-        memory_groups: dict = {}
-        for obj in empty_tenant_embd_id_memories:
-            if memory_groups.get((obj.tenant_id, obj.embd_id)):
-                memory_groups[(obj.tenant_id, obj.embd_id)].append(obj.id)
-            else:
-                memory_groups[(obj.tenant_id, obj.embd_id)] = [obj.id]
-        update_cnt = 0
-        for k, v in memory_groups.items():
-            tenant_llm = TenantLLMService.get_api_key(k[0], k[1])
-            if tenant_llm:
-                update_cnt += MemoryService.filter_update([Memory.id.in_(v)], {"tenant_embd_id": tenant_llm.id})
-        logging.info(f"Update {update_cnt} tenant_embd_id in table memory.")
-
-    empty_tenant_llm_id_memories = MemoryService.get_null_tenant_llm_id_row()
-    if empty_tenant_llm_id_memories:
-        logging.info(f"Found {len(empty_tenant_llm_id_memories)} empty tenant_llm_id memories.")
-        memory_groups: dict = {}
-        for obj in empty_tenant_llm_id_memories:
-            if memory_groups.get((obj.tenant_id, obj.llm_id)):
-                memory_groups[(obj.tenant_id, obj.llm_id)].append(obj.id)
-            else:
-                memory_groups[(obj.tenant_id, obj.llm_id)] = [obj.id]
-        update_cnt = 0
-        for k, v in memory_groups.items():
-            tenant_llm = TenantLLMService.get_api_key(k[0], k[1])
-            if tenant_llm:
-                update_cnt += MemoryService.filter_update([Memory.id.in_(v)], {"tenant_llm_id": tenant_llm.id})
-        logging.info(f"Update {update_cnt} tenant_llm_id in table memory.")
     # tenant
     empty_tenant_model_id_tenants = TenantService.get_null_tenant_model_id_rows()
     if empty_tenant_model_id_tenants:

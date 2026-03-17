@@ -26,7 +26,7 @@ from api.apps.services import memory_api_service
 from api.utils.tenant_utils import ensure_tenant_model_id_for_params
 
 
-@manager.route("/memories", methods=["POST"])  # noqa: F821
+@manager.route("/km/memories", methods=["POST"])  # noqa: F821
 @login_required
 @validate_request("name", "memory_type", "embd_id", "llm_id")
 async def create_memory():
@@ -83,7 +83,7 @@ async def create_memory():
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/memories/<memory_id>", methods=["PUT"])  # noqa: F821
+@manager.route("/km/memories/<memory_id>", methods=["PUT"])  # noqa: F821
 @login_required
 async def update_memory(memory_id):
     req = await get_request_json()
@@ -108,7 +108,7 @@ async def update_memory(memory_id):
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/memories/<memory_id>", methods=["DELETE"])  # noqa: F821
+@manager.route("/km/memories/<memory_id>", methods=["DELETE"])  # noqa: F821
 @login_required
 async def delete_memory(memory_id):
     try:
@@ -122,7 +122,7 @@ async def delete_memory(memory_id):
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/memories", methods=["GET"])  # noqa: F821
+@manager.route("/km/memories", methods=["GET"])  # noqa: F821
 @login_required
 async def list_memory():
     filter_params = {
@@ -139,7 +139,7 @@ async def list_memory():
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/memories/<memory_id>/config", methods=["GET"])  # noqa: F821
+@manager.route("/km/memories/<memory_id>/config", methods=["GET"])  # noqa: F821
 @login_required
 async def get_memory_config(memory_id):
     try:
@@ -153,7 +153,7 @@ async def get_memory_config(memory_id):
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/memories/<memory_id>", methods=["GET"])  # noqa: F821
+@manager.route("/km/memories/<memory_id>", methods=["GET"])  # noqa: F821
 @login_required
 async def get_memory_messages(memory_id):
     args = request.args
@@ -177,7 +177,7 @@ async def get_memory_messages(memory_id):
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/messages", methods=["POST"]) # noqa: F821
+@manager.route("/km/messages", methods=["POST"]) # noqa: F821
 @login_required
 @validate_request("memory_id", "agent_id", "session_id", "user_input", "agent_response")
 async def add_message():
@@ -199,7 +199,7 @@ async def add_message():
     return get_json_result(message="Some messages failed to add. Detail:" + msg, code=RetCode.SERVER_ERROR)
 
 
-@manager.route("/messages/<memory_id>:<message_id>", methods=["DELETE"]) # noqa: F821
+@manager.route("/km/messages/<memory_id>:<message_id>", methods=["DELETE"]) # noqa: F821
 @login_required
 async def forget_message(memory_id: str, message_id: int):
     try:
@@ -213,7 +213,7 @@ async def forget_message(memory_id: str, message_id: int):
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/messages/<memory_id>:<message_id>", methods=["PUT"]) # noqa: F821
+@manager.route("/km/messages/<memory_id>:<message_id>", methods=["PUT"]) # noqa: F821
 @login_required
 @validate_request("status")
 async def update_message(memory_id: str, message_id: int):
@@ -236,7 +236,7 @@ async def update_message(memory_id: str, message_id: int):
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/messages/search", methods=["GET"]) # noqa: F821
+@manager.route("/km/messages/search", methods=["GET"]) # noqa: F821
 @login_required
 async def search_message():
     args = request.args
@@ -266,7 +266,7 @@ async def search_message():
     res = await memory_api_service.search_message(filter_dict, params)
     return get_json_result(message=True, data=res)
 
-@manager.route("/messages", methods=["GET"]) # noqa: F821
+@manager.route("/km/messages", methods=["GET"]) # noqa: F821
 @login_required
 async def get_messages():
     args = request.args
@@ -286,7 +286,7 @@ async def get_messages():
         return get_json_result(code=RetCode.SERVER_ERROR, message="Internal server error")
 
 
-@manager.route("/messages/<memory_id>:<message_id>/content", methods=["GET"]) # noqa: F821
+@manager.route("/km/messages/<memory_id>:<message_id>/content", methods=["GET"]) # noqa: F821
 @login_required
 async def get_message_content(memory_id: str, message_id: int):
     try:

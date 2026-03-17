@@ -39,10 +39,6 @@ from rag.utils.oss_conn import RAGFlowOSS
 
 from rag.nlp import search
 
-import memory.utils.es_conn as memory_es_conn
-import memory.utils.infinity_conn as memory_infinity_conn
-import memory.utils.ob_conn as memory_ob_conn
-
 LLM = None
 LLM_FACTORY = None
 LLM_BASE_URL = None
@@ -84,7 +80,6 @@ DOC_ENGINE_OCEANBASE = (DOC_ENGINE.lower() == "oceanbase")
 
 
 docStoreConn = None
-msgStoreConn = None
 
 retriever = None
 kg_retriever = None
@@ -296,21 +291,6 @@ def init_settings():
         docStoreConn = rag.utils.ob_conn.OBConnection()
     else:
         raise Exception(f"Not supported doc engine: {DOC_ENGINE}")
-
-    global msgStoreConn
-    # use the same engine for message store
-    if DOC_ENGINE == "elasticsearch":
-        ES = get_base_config("es", {})
-        msgStoreConn = memory_es_conn.ESConnection()
-    elif DOC_ENGINE == "infinity":
-        INFINITY = get_base_config("infinity", {
-            "uri": "infinity:23817",
-            "postgres_port": 5432,
-            "db_name": "default_db"
-        })
-        msgStoreConn = memory_infinity_conn.InfinityConnection()
-    elif lower_case_doc_engine in ["oceanbase", "seekdb"]:
-        msgStoreConn = memory_ob_conn.OBConnection()
 
     global AZURE, S3, MINIO, OSS, GCS
     if STORAGE_IMPL_TYPE in ['AZURE_SPN', 'AZURE_SAS']:

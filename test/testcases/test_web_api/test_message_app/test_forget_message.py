@@ -63,7 +63,7 @@ class TestForgetMessage:
     @pytest.mark.p2
     def test_forget_message_invalid_message_id(self, WebApiAuth):
         memory_id = self.memory_id
-        url = f"{HOST_ADDRESS}/api/{VERSION}/messages/{memory_id}:invalid_message_id"
+        url = f"{HOST_ADDRESS}/api/{VERSION}/km/messages/{memory_id}:invalid_message_id"
         res = requests.delete(url=url, headers={"Content-Type": "application/json"}, auth=WebApiAuth).json()
         assert res["code"] == 500, res
         assert "Internal server error" in res["message"], res

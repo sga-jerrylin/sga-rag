@@ -1311,28 +1311,6 @@ class EvaluationResult(DataBaseModel):
         db_table = "evaluation_results"
 
 
-class Memory(DataBaseModel):
-    id = CharField(max_length=32, primary_key=True)
-    name = CharField(max_length=128, null=False, index=False, help_text="Memory name")
-    avatar = TextField(null=True, help_text="avatar base64 string")
-    tenant_id = CharField(max_length=32, null=False, index=True)
-    memory_type = IntegerField(null=False, default=1, index=True, help_text="Bit flags (LSB->MSB): 1=raw, 2=semantic, 4=episodic, 8=procedural. E.g., 5 enables raw + episodic.")
-    storage_type = CharField(max_length=32, default='table', null=False, index=True, help_text="table|graph")
-    embd_id = CharField(max_length=128, null=False, index=False, help_text="embedding model ID")
-    tenant_embd_id = IntegerField(null=True, help_text="id in tenant_llm", index=True)
-    llm_id = CharField(max_length=128, null=False, index=False, help_text="chat model ID")
-    tenant_llm_id = IntegerField(null=True, help_text="id in tenant_llm", index=True)
-    permissions = CharField(max_length=16, null=False, index=True, help_text="me|team", default="me")
-    description = TextField(null=True, help_text="description")
-    memory_size = IntegerField(default=5242880, null=False, index=False)
-    forgetting_policy = CharField(max_length=32, null=False, default="FIFO", index=False, help_text="LRU|FIFO")
-    temperature = FloatField(default=0.5, index=False)
-    system_prompt = TextField(null=True, help_text="system prompt", index=False)
-    user_prompt = TextField(null=True, help_text="user prompt", index=False)
-
-    class Meta:
-        db_table = "memory"
-
 class SystemSettings(DataBaseModel):
     name = CharField(max_length=128, primary_key=True)
     source = CharField(max_length=32, null=False, index=False)
@@ -1640,8 +1618,6 @@ def migrate_db():
     alter_db_add_column(migrator, "knowledgebase", "tenant_embd_id", IntegerField(null=True, help_text="id in tenant_llm", index=True))
     alter_db_add_column(migrator, "dialog", "tenant_llm_id", IntegerField(null=True, help_text="id in tenant_llm", index=True))
     alter_db_add_column(migrator, "dialog", "tenant_rerank_id", IntegerField(null=True, help_text="id in tenant_llm", index=True))
-    alter_db_add_column(migrator, "memory", "tenant_embd_id", IntegerField(null=True, help_text="id in tenant_llm", index=True))
-    alter_db_add_column(migrator, "memory", "tenant_llm_id", IntegerField(null=True, help_text="id in tenant_llm", index=True))
     alter_db_add_column(migrator, "user_canvas_version", "release", BooleanField(null=False, help_text="is released", default=False, index=True))
     logging.disable(logging.NOTSET)
     # this is after re-enabling logging to allow logging changed user emails

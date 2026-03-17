@@ -1,5 +1,5 @@
 export interface IMessageInfo {
-  message_id: number;
+  message_id: string | number;
   message_type: 'semantic' | 'raw' | 'procedural';
   source_id: string | '-';
   user_id: string;

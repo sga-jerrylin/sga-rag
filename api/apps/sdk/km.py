@@ -16,11 +16,15 @@ from api.db.km_models import (
     KmProvenance,
     KmWebhook,
 )
+from api.km.services.context_pack_service import ContextPackService
+from api.km.services.fact_km_service import FactKmService
+from api.km.services.graph_km_service import GraphKmService
 from api.km.services.graph_maintenance import GraphMaintenanceService
 from api.km.services.ingest_service import IngestService
 from api.km.services.job_runner import KmJobRunner
 from api.km.services.memory_km_service import KmMemoryService
 from api.km.services.metrics_service import MetricsService
+from api.km.services.space_km_service import SpaceKmService
 from api.utils.api_utils import get_request_json, get_result, token_required
 from common.constants import RetCode
 from common.graph_store import get_graph_store
@@ -49,6 +53,30 @@ def _km_result(data=None, status="ok", meta=None, code=0, message="success"):
 
 def _km_error(message="Unknown error", code=RetCode.SERVER_ERROR, data=None):
     return _km_result(data=data, status="error", code=code, message=message)
+
+
+def _to_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _request_args_to_dict():
+    list_like_keys = {"space_ids", "statuses", "modes", "sources", "content_types", "labels"}
+    bool_keys = {"include_archived", "include_provenance"}
+    params = {}
+    for key in request.args.keys():
+        values = request.args.getlist(key)
+        if len(values) == 1 and key in list_like_keys and "," in values[0]:
+            values = [v.strip() for v in values[0].split(",") if v.strip()]
+        if len(values) == 1 and key not in list_like_keys:
+            value = values[0]
+            params[key] = _to_bool(value) if key in bool_keys else value
+            continue
+        params[key] = values
+    return params
 
 
 # ---------------------------------------------------------------------------
@@ -222,36 +250,161 @@ async def ingest_events_sse(tenant_id, job_id):
 
 
 # ---------------------------------------------------------------------------
-# Memory
+# Spaces
 # ---------------------------------------------------------------------------
 
 
-@manager.route("/km/memory", methods=["POST"])  # noqa: F821
+@manager.route("/km/spaces", methods=["POST"])  # noqa: F821
 @token_required
-async def memory_upsert(tenant_id):
+async def km_space_upsert(tenant_id):
     params = await get_request_json()
-    ok, code, message, data = await KmMemoryService.upsert(tenant_id, params or {})
+    ok, code, message, data = await SpaceKmService.upsert(tenant_id, params or {})
     if not ok:
         return _km_error(message=message, code=code)
     return _km_result(data=data)
 
 
-@manager.route("/km/memory/query", methods=["POST"])  # noqa: F821
+@manager.route("/km/spaces", methods=["GET"])  # noqa: F821
 @token_required
-async def memory_query(tenant_id):
-    params = await get_request_json()
-    ok, code, message, data = await KmMemoryService.query(tenant_id, params or {})
+async def km_space_list(tenant_id):
+    ok, code, message, data = await SpaceKmService.list_spaces(tenant_id, _request_args_to_dict())
     if not ok:
         return _km_error(message=message, code=code)
     return _km_result(data=data)
 
 
-@manager.route("/km/memory/<memory_id>", methods=["DELETE"])  # noqa: F821
+@manager.route("/km/spaces/<space_id>", methods=["GET"])  # noqa: F821
 @token_required
-async def memory_delete(tenant_id, memory_id):
-    ok, code, message, data = await KmMemoryService.delete(tenant_id, memory_id)
+async def km_space_get(tenant_id, space_id):
+    ok, code, message, data = await SpaceKmService.get(tenant_id, space_id)
     if not ok:
         return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+@manager.route("/km/spaces/<space_id>", methods=["DELETE"])  # noqa: F821
+@token_required
+async def km_space_delete(tenant_id, space_id):
+    ok, code, message, data = await SpaceKmService.delete(tenant_id, space_id)
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+# ---------------------------------------------------------------------------
+# Items
+# ---------------------------------------------------------------------------
+
+
+@manager.route("/km/items", methods=["POST"])  # noqa: F821
+@token_required
+async def km_item_put(tenant_id):
+    params = await get_request_json()
+    ok, code, message, data = await KmMemoryService.put_item(tenant_id, params or {})
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+@manager.route("/km/items/batch", methods=["POST"])  # noqa: F821
+@token_required
+async def km_item_put_batch(tenant_id):
+    params = await get_request_json()
+    ok, code, message, data = await KmMemoryService.put_items(tenant_id, params or {})
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+@manager.route("/km/items/search", methods=["POST"])  # noqa: F821
+@token_required
+async def km_item_search(tenant_id):
+    params = await get_request_json()
+    ok, code, message, data = await KmMemoryService.search_items(tenant_id, params or {})
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+@manager.route("/km/items/recent", methods=["GET"])  # noqa: F821
+@token_required
+async def km_item_recent(tenant_id):
+    ok, code, message, data = await KmMemoryService.recent_items(tenant_id, _request_args_to_dict())
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+@manager.route("/km/items/<item_id>", methods=["DELETE"])  # noqa: F821
+@token_required
+async def km_item_delete(tenant_id, item_id):
+    ok, code, message, data = await KmMemoryService.delete_item(tenant_id, item_id)
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+# ---------------------------------------------------------------------------
+# Facts
+# ---------------------------------------------------------------------------
+
+
+@manager.route("/km/facts", methods=["POST"])  # noqa: F821
+@token_required
+async def km_fact_upsert(tenant_id):
+    params = await get_request_json()
+    ok, code, message, data = await FactKmService.upsert(tenant_id, params or {})
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+@manager.route("/km/facts/search", methods=["POST"])  # noqa: F821
+@token_required
+async def km_fact_search(tenant_id):
+    params = await get_request_json()
+    ok, code, message, data = await FactKmService.search(tenant_id, params or {})
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+@manager.route("/km/facts/<fact_id>", methods=["DELETE"])  # noqa: F821
+@token_required
+async def km_fact_delete(tenant_id, fact_id):
+    ok, code, message, data = await FactKmService.delete(tenant_id, fact_id)
+    if not ok:
+        return _km_error(message=message, code=code)
+    return _km_result(data=data)
+
+
+# ---------------------------------------------------------------------------
+# Context Pack
+# ---------------------------------------------------------------------------
+
+
+@manager.route("/km/context/pack", methods=["POST"])  # noqa: F821
+@token_required
+async def km_context_pack(tenant_id):
+    params = await get_request_json()
+    params = params or {}
+    space_ids = params.get("space_ids") or []
+    if isinstance(space_ids, str):
+        space_ids = [sid.strip() for sid in space_ids.split(",") if sid.strip()]
+    data = await ContextPackService.build(
+        tenant_id,
+        query=params.get("query"),
+        space_ids=space_ids,
+        scope=params.get("scope"),
+        top_k_items=int(params.get("top_k_items", 5)),
+        top_k_facts=int(params.get("top_k_facts", 5)),
+        graph_entity=params.get("graph_entity") or params.get("entity"),
+        graph_kb_id=params.get("graph_kb_id") or params.get("kb_id"),
+        graph_hops=int(params.get("graph_hops", 2)),
+        graph_limit=int(params.get("graph_limit", 10)),
+        include_provenance=_to_bool(params.get("include_provenance", True)),
+        recent_limit=int(params.get("recent_limit", 5)),
+    )
     return _km_result(data=data)
 
 
@@ -322,15 +475,79 @@ async def knowledge_search(tenant_id):
 @token_required
 async def graph_query(tenant_id):
     params = await get_request_json()
-    # Stub: return empty graph
-    return _km_result(data={"nodes": [], "edges": []})
+    params = params or {}
+    operation = str(params.get("operation") or params.get("query_type") or params.get("mode") or "neighbors").strip().lower()
+    kb_id = params.get("kb_id")
+
+    if operation in {"neighbors", "entity_neighbors"}:
+        entity = params.get("entity") or params.get("name")
+        if not kb_id or not entity:
+            return _km_error(message="kb_id and entity are required", code=RetCode.ARGUMENT_ERROR)
+        data = await GraphKmService.neighbors(
+            tenant_id,
+            kb_id,
+            entity,
+            hops=int(params.get("hops", 2)),
+            limit=int(params.get("limit", 50)),
+        )
+        return _km_result(data=data)
+
+    if operation in {"path", "find_path"}:
+        source = params.get("source")
+        target = params.get("target")
+        if not kb_id or not source or not target:
+            return _km_error(message="kb_id, source, target are required", code=RetCode.ARGUMENT_ERROR)
+        data = await GraphKmService.find_path(
+            tenant_id,
+            kb_id,
+            source,
+            target,
+            max_hops=int(params.get("max_hops", 4)),
+        )
+        return _km_result(data=data)
+
+    if operation == "timeline":
+        if not kb_id:
+            return _km_error(message="kb_id is required", code=RetCode.ARGUMENT_ERROR)
+        data = await GraphKmService.timeline(
+            tenant_id,
+            kb_id,
+            limit=int(params.get("limit", 20)),
+        )
+        return _km_result(data=data)
+
+    if operation == "ontology":
+        if not kb_id:
+            return _km_error(message="kb_id is required", code=RetCode.ARGUMENT_ERROR)
+        data = await thread_pool_exec(
+            GraphKmService.list_ontology,
+            tenant_id=tenant_id,
+            kb_id=kb_id,
+            ontology_type=params.get("ontology_type"),
+            limit=int(params.get("limit", 500)),
+        )
+        return _km_result(data={"items": data})
+
+    return _km_error(message=f"Unsupported graph operation: {operation}", code=RetCode.ARGUMENT_ERROR)
 
 
 @manager.route("/km/graph/context-pack", methods=["POST"])  # noqa: F821
 @token_required
 async def graph_context_pack(tenant_id):
     params = await get_request_json()
-    return _km_result(data={"nodes": [], "edges": []})
+    params = params or {}
+    kb_id = params.get("kb_id")
+    entity = params.get("entity") or params.get("name")
+    if not kb_id or not entity:
+        return _km_error(message="kb_id and entity are required", code=RetCode.ARGUMENT_ERROR)
+    data = await GraphKmService.neighbors(
+        tenant_id,
+        kb_id,
+        entity,
+        hops=int(params.get("hops", 2)),
+        limit=int(params.get("limit", 50)),
+    )
+    return _km_result(data=data)
 
 
 @manager.route("/km/graph/recompute-pagerank", methods=["POST"])  # noqa: F821
@@ -394,10 +611,24 @@ async def graph_health(tenant_id):
 @manager.route("/km/ontology/<kb_id>/recommend", methods=["GET"])  # noqa: F821
 @token_required
 async def ontology_recommend(tenant_id, kb_id):
+    entity_types = await thread_pool_exec(
+        GraphKmService.list_ontology,
+        tenant_id=tenant_id,
+        kb_id=kb_id,
+        ontology_type="entity_type",
+        limit=100,
+    )
+    relation_types = await thread_pool_exec(
+        GraphKmService.list_ontology,
+        tenant_id=tenant_id,
+        kb_id=kb_id,
+        ontology_type="relation_type",
+        limit=100,
+    )
     return _km_result(data={
-        "entity_types": [],
-        "relation_types": [],
-        "reasoning": "No ontology recommendations available yet.",
+        "entity_types": entity_types,
+        "relation_types": relation_types,
+        "reasoning": "Based on current KM ontology definitions." if entity_types or relation_types else "No ontology recommendations available yet.",
     })
 
 

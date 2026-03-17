@@ -25,8 +25,8 @@ from api.db.services.doc_metadata_service import DocMetadataService
 from common.metadata_utils import apply_meta_data_filter
 from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.db.services.llm_service import LLMBundle
-from api.db.services.memory_service import MemoryService
-from api.db.joint_services import memory_message_service
+from api.km.services.memory_km_service import KmMemoryService
+from api.km.services.space_km_service import SpaceKmService
 from api.db.joint_services.tenant_model_service import get_model_config_by_type_and_name, get_tenant_default_model_by_type
 from common import settings
 from common.connection_utils import timeout
@@ -260,26 +260,41 @@ class Retrieval(ToolBase, ABC):
     async def _retrieve_memory(self, query_text: str):
         memory_ids: list[str] = [memory_id for memory_id in self._param.memory_ids]
         user_id: str = self._param.user_id if hasattr(self._param, "user_id") else None
-        memory_list = MemoryService.get_by_ids(memory_ids)
-        if not memory_list:
+        tenant_id = self._canvas.get_tenant_id()
+        km_space_ids = await SpaceKmService.existing_ids(tenant_id, memory_ids)
+        missing_space_ids = [memory_id for memory_id in memory_ids if memory_id not in set(km_space_ids)]
+        if missing_space_ids:
+            raise Exception(f"Legacy memory ids are no longer supported: {', '.join(missing_space_ids)}")
+        if not km_space_ids:
             raise Exception("No memory is selected.")
-
-        embd_names = list({memory.embd_id for memory in memory_list})
-        assert len(embd_names) == 1, "Memory use different embedding models."
 
         vars = self.get_input_elements_from_text(query_text)
         vars = {k: o["value"] for k, o in vars.items()}
         query = self.string_format(query_text, vars)
-        # query message
-        filter_dict: dict = {"memory_id": memory_ids}
-        if user_id:
-            filter_dict["user_id"] = user_id
-        message_list = memory_message_service.query_message(filter_dict, {
+        message_list = []
+
+        ok, code, message, data = await KmMemoryService.search_items(tenant_id, {
             "query": query,
-            "similarity_threshold": self._param.similarity_threshold,
+            "space_ids": km_space_ids,
+            "top_k": self._param.top_n,
+            "min_similarity": self._param.similarity_threshold,
             "keywords_similarity_weight": self._param.keywords_similarity_weight,
-            "top_n": self._param.top_n
+            "mode": "hybrid",
+            "owner_id": user_id,
         })
+        if ok and data:
+            message_list.extend([
+                {
+                    "message_id": item["id"],
+                    "memory_id": item.get("space_id"),
+                    "content": item["content"],
+                    "_score": item.get("_score") or 0,
+                }
+                for item in data.get("items", [])
+                if item.get("content")
+            ])
+
+        message_list = sorted(message_list, key=lambda item: float(item.get("_score") or 0), reverse=True)[: self._param.top_n]
         if not message_list:
             self.set_output("formalized_content", self._param.empty_response)
             return ""

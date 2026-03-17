@@ -122,6 +122,50 @@ class KmProvenance(DataBaseModel):
         )
 
 
+class KmSpace(DataBaseModel):
+    """Logical namespace for memory, facts, graph, and context retrieval."""
+
+    id = CharField(max_length=32, primary_key=True)
+    tenant_id = CharField(max_length=32, null=False, index=True)
+
+    name = CharField(max_length=255, null=False, index=True)
+    scope = CharField(max_length=32, default="personal", index=True)  # session | personal | team | org | project
+    owner_id = CharField(max_length=64, null=True, index=True)
+
+    project_id = CharField(max_length=64, null=True, index=True)
+    agent_id = CharField(max_length=64, null=True, index=True)
+    session_id = CharField(max_length=64, null=True, index=True)
+
+    description = TextField(null=True)
+    labels = JSONField(default=[])
+    memory_profile_id = CharField(max_length=64, null=True, index=True)
+
+    is_archived = BooleanField(default=False, index=True)
+    is_deleted = BooleanField(default=False, index=True)
+
+    class Meta:
+        db_table = "km_space"
+        indexes = (
+            (("tenant_id", "name"), False),
+            (("tenant_id", "scope", "owner_id"), False),
+        )
+
+
+class KmSpaceProfile(DataBaseModel):
+    """Profile/config storage for the memory UI backed by KM spaces."""
+
+    id = CharField(max_length=32, primary_key=True)
+    tenant_id = CharField(max_length=32, null=False, index=True)
+    space_id = CharField(max_length=32, null=False, index=True)
+    config = JSONField(default={})
+
+    class Meta:
+        db_table = "km_space_profile"
+        indexes = (
+            (("tenant_id", "space_id"), True),
+        )
+
+
 class KmMemory(DataBaseModel):
     """Agent-facing long-term memory item."""
 
@@ -295,6 +339,8 @@ KM_TABLES = [
     KmIngestJob,
     KmIngestEvent,
     KmProvenance,
+    KmSpace,
+    KmSpaceProfile,
     KmMemory,
     KmOntology,
     KmWebhook,
@@ -309,4 +355,3 @@ KM_TABLES = [
 @DB.lock("init_km_tables", 60)
 def init_km_tables():
     DB.create_tables(KM_TABLES, safe=True)
-

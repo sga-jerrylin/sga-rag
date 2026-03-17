@@ -83,7 +83,7 @@ const API_WHITELIST = [
   '/v1/canvas/set',
   '/v1/canvas/setting',
   '/v1/search/update',
-  '/api/v1/memories',
+  '/api/v1/km/memories',
   '/v1/kb/create',
   '/v1/kb/update',
   '/v1/dataflow/set',

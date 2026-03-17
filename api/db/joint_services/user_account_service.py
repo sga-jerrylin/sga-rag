@@ -35,10 +35,24 @@ from api.db.services.task_service import TaskService
 from api.db.services.tenant_llm_service import TenantLLMService
 from api.db.services.user_canvas_version import UserCanvasVersionService
 from api.db.services.user_service import TenantService, UserService, UserTenantService
-from api.db.services.memory_service import MemoryService
-from memory.services.messages import MessageService
+from api.db.km_models import (
+    KmAuditLog,
+    KmFact,
+    KmFeedback,
+    KmIngestEvent,
+    KmIngestJob,
+    KmMemory,
+    KmOntology,
+    KmProvenance,
+    KmQuota,
+    KmSpace,
+    KmSpaceProfile,
+    KmWebhook,
+)
+from api.km.services.memory_km_service import KmMemoryService
 from rag.nlp import search
 from common import settings
+from common.graph_store import get_graph_store
 
 def create_new_user(user_info: dict) -> dict:
     """
@@ -231,6 +245,15 @@ def delete_user_data(user_id: str) -> dict:
                 r = settings.docStoreConn.delete({"kb_id": kb_ids},
                                          search.index_name(tenant_id), kb_ids)
                 done_msg += f"- Deleted {r} chunk records.\n"
+                try:
+                    graph_store = get_graph_store()
+                    if graph_store:
+                        for kb_id in kb_ids:
+                            graph_store.drop_space(tenant_id, kb_id)
+                        done_msg += f"- Dropped {len(kb_ids)} graph spaces.\n"
+                except Exception as e:
+                    logging.warning(f"Failed to drop graph spaces for tenant {tenant_id}: {e}")
+                    done_msg += "- Warning: Failed to drop graph spaces (continuing).\n"
                 kb_delete_res = KnowledgebaseService.delete_by_ids(kb_ids)
                 done_msg += f"- Deleted {kb_delete_res} dataset records.\n"
                 # step1.1.4 delete agents
@@ -257,15 +280,35 @@ def delete_user_data(user_id: str) -> dict:
             except Exception as e:
                 logging.warning(f"Failed to delete metadata table for tenant {tenant_id}: {e}")
                 done_msg += "- Warning: Failed to delete metadata table (continuing).\n"
-            # step1.3 delete memory and messages
-            user_memory = MemoryService.get_by_tenant_id(tenant_id)
-            if user_memory:
-                for memory in user_memory:
-                    if MessageService.has_index(tenant_id, memory.id):
-                        MessageService.delete_index(tenant_id, memory.id)
-                done_msg += " Deleted memory index."
-                memory_delete_res = MemoryService.delete_by_ids([m.id for m in user_memory])
-                done_msg += f"Deleted {memory_delete_res} memory datasets."
+            # step1.3 delete KM memory and tenant-scoped KM artifacts
+            try:
+                km_memory_index = KmMemoryService._index_name(tenant_id)
+                if settings.docStoreConn.index_exist(km_memory_index, ""):
+                    settings.docStoreConn.delete_idx(km_memory_index, "")
+                    done_msg += "- Deleted KM memory index.\n"
+            except Exception as e:
+                logging.warning(f"Failed to delete KM memory index for tenant {tenant_id}: {e}")
+                done_msg += "- Warning: Failed to delete KM memory index (continuing).\n"
+
+            km_deleted = {
+                "memories": KmMemory.delete().where(KmMemory.tenant_id == tenant_id).execute(),
+                "spaces": KmSpace.delete().where(KmSpace.tenant_id == tenant_id).execute(),
+                "space_profiles": KmSpaceProfile.delete().where(KmSpaceProfile.tenant_id == tenant_id).execute(),
+                "facts": KmFact.delete().where(KmFact.tenant_id == tenant_id).execute(),
+                "ontology": KmOntology.delete().where(KmOntology.tenant_id == tenant_id).execute(),
+                "provenance": KmProvenance.delete().where(KmProvenance.tenant_id == tenant_id).execute(),
+                "ingest_jobs": KmIngestJob.delete().where(KmIngestJob.tenant_id == tenant_id).execute(),
+                "ingest_events": KmIngestEvent.delete().where(KmIngestEvent.tenant_id == tenant_id).execute(),
+                "feedback": KmFeedback.delete().where(KmFeedback.tenant_id == tenant_id).execute(),
+                "quota": KmQuota.delete().where(KmQuota.tenant_id == tenant_id).execute(),
+                "audit_logs": KmAuditLog.delete().where(KmAuditLog.tenant_id == tenant_id).execute(),
+                "webhooks": KmWebhook.delete().where(KmWebhook.tenant_id == tenant_id).execute(),
+            }
+            done_msg += (
+                "- Deleted KM artifacts: "
+                + ", ".join(f"{key}={value}" for key, value in km_deleted.items())
+                + ".\n"
+            )
             # step1.4 delete own tenant
             tenant_delete_res = TenantService.delete_by_id(tenant_id)
             done_msg += f"- Deleted {tenant_delete_res} tenant.\n"

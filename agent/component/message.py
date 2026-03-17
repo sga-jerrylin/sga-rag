@@ -35,7 +35,8 @@ from common.connection_utils import timeout
 from common.misc_utils import get_uuid
 from common import settings
 
-from api.db.joint_services.memory_message_service import queue_save_to_memory_task
+from api.km.services.memory_km_service import KmMemoryService
+from api.km.services.space_km_service import SpaceKmService
 
 
 class MessageParam(ComponentParamBase):
@@ -203,7 +204,11 @@ class Message(ComponentBase):
 
         self.set_output("content", content)
         self._convert_content(content)
-        self._save_to_memory(content)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.run_until_complete(self._save_to_memory(content))
+        except RuntimeError:
+            asyncio.run(self._save_to_memory(content))
 
     def thoughts(self) -> str:
         return ""
@@ -432,6 +437,10 @@ class Message(ComponentBase):
         if not hasattr(self._param, "memory_ids") or not self._param.memory_ids:
             return True, "No memory selected."
 
+        tenant_id = self._canvas._tenant_id
+        selected_ids = list(self._param.memory_ids)
+        km_space_ids = await SpaceKmService.existing_ids(tenant_id, selected_ids)
+        missing_space_ids = [memory_id for memory_id in selected_ids if memory_id not in set(km_space_ids)]
         message_dict = {
             "user_id": self._param.user_id if hasattr(self._param, "user_id") else "",
             "agent_id": self._canvas._id,
@@ -439,4 +448,27 @@ class Message(ComponentBase):
             "user_input": self._canvas.get_sys_query(),
             "agent_response": content
         }
-        return await queue_save_to_memory_task(self._param.memory_ids, message_dict)
+        if missing_space_ids:
+            return False, f"Legacy memory ids are no longer supported: {', '.join(missing_space_ids)}"
+        if km_space_ids:
+            km_items = []
+            for space_id in km_space_ids:
+                km_items.append({
+                    "space_id": space_id,
+                    "scope": "session",
+                    "kind": "dialogue",
+                    "owner_id": message_dict["user_id"],
+                    "principal_id": message_dict["user_id"],
+                    "trace_id": self._canvas.task_id,
+                    "source_ref": json.dumps({
+                        "source": "agent_message",
+                        "agent_id": self._canvas._id,
+                        "session_id": self._canvas.task_id,
+                    }, ensure_ascii=False),
+                    "content": f"User Input: {message_dict.get('user_input', '')}\nAgent Response: {message_dict.get('agent_response', '')}",
+                })
+            ok, code, msg, data = await KmMemoryService.put_items(tenant_id, {"items": km_items})
+            if not ok:
+                return False, msg
+
+        return True, "Saved to KM memory."
